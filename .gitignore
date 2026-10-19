@@ -16,3 +16,4 @@ chat_history.json
 # Системные
 .DS_Store
 Thumbs.db
+chroma_db/
