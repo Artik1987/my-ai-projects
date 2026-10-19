@@ -66,3 +66,12 @@ cd my-ai-projects
 py -3.13 -m pip install aiogram openai python-dotenv scikit-learn
 
 # 3. Создай файл .env с ключами (по образцу .env.example)
+
+## 🔐 Переменные окружения
+
+Файл `.env` (не входит в репозиторий):
+
+```text
+OPENROUTER_API_KEY=sk-or-v1-...
+TELEGRAM_BOT_TOKEN=1234567890:ABC...
+- Услуги на Kwork: [AI Telegram Bot Development](https://kwork.com/chatbots/55235215/ai-telegram-bot-development-with-openai)
