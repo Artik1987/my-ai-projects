@@ -2,9 +2,11 @@ name: Crypto Signals
 
 on:
   schedule:
-    # Запускать каждый час (в 0 минут каждого часа)
     - cron: '0 * * * *'
-  workflow_dispatch: # Позволяет запустить вручную для теста
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   check-signals:
