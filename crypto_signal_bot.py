@@ -10,6 +10,7 @@ import ccxt
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
 load_dotenv()
@@ -122,6 +123,18 @@ def get_futures_signal(df):
 async def check_and_send_signals():
     """Главная функция проверки и отправки сигналов."""
     state = load_state()
+        # Создаём клавиатуру с реферальными ссылками
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📈 Торговать на бирже", url="https://твоя-реф-ссылка.com"),
+                InlineKeyboardButton(text="📰 Новости", url="https://твой-новостной-сервис.com")
+            ],
+            [
+                InlineKeyboardButton(text="💬 Чат трейдеров", url="https://t.me/твой_чат")
+            ]
+        ]
+    )
     new_state = state.copy()
 
     # ── 1. Спот сигналы (топ-100 монет) ──
@@ -156,7 +169,8 @@ async def check_and_send_signals():
                 f"#спот #{sym.lower()}"
             )
             try:
-                await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML")
+                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
                 print(f"  ✅ {sym}: {old_signal} -> {current_signal}")
             except Exception as e:
                 print(f"  ❌ Не удалось отправить сообщение для {sym}: {e}")
@@ -192,7 +206,7 @@ async def check_and_send_signals():
                 f"#фьючерс #{sym.lower()}"
             )
             try:
-                await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML")
+                await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
                 print(f"  ✅ {sym}: {old_signal} -> {current_signal}")
             except Exception as e:
                 print(f"  ❌ Не удалось отправить сообщение для {sym}: {e}")
