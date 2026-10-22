@@ -18,3 +18,4 @@ chat_history.json
 Thumbs.db
 chroma_db/
 chroma_agent_db/
+chroma_tg_agent/
