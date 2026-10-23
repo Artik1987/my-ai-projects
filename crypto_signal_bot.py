@@ -2,7 +2,6 @@
 import asyncio
 import json
 import os
-import time
 import requests
 import pandas as pd
 import pandas_ta as ta
@@ -10,7 +9,6 @@ import ccxt
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
 load_dotenv()
@@ -23,7 +21,6 @@ CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 spot_exchange = ccxt.binance({'enableRateLimit': True})
 futures_exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
 
-# ── Файл для хранения предыдущих сигналов ──
 STATE_FILE = "signals_state.json"
 
 
@@ -39,28 +36,17 @@ def save_state(state):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
-# ── Получение топ-100 монет ──
 def get_top_100_symbols():
     """Возвращает список тикеров топ-100 монет по капитализации."""
     url = "https://api.coingecko.com/api/v3/coins/markets"
-    params = {
-        "vs_currency": "usd",
-        "order": "market_cap_desc",
-        "per_page": 100,
-        "page": 1,
-    }
+    params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1}
     try:
         r = requests.get(url, params=params, timeout=10)
         return [c["symbol"].upper() for c in r.json()]
     except Exception as e:
         print(f"Ошибка CoinGecko: {e}")
-        # Fallback: статический список на случай сбоя API
         return ["BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "AVAX", "DOGE", "DOT", "LINK",
-                "TRX", "MATIC", "SHIB", "LTC", "BCH", "UNI", "ATOM", "XLM", "ETC", "FIL",
-                "APT", "ARB", "OP", "NEAR", "INJ", "SUI", "SEI", "TIA", "ICP", "RNDR",
-                "IMX", "HBAR", "GRT", "AAVE", "MKR", "ALGO", "QNT", "FTM", "SAND", "MANA",
-                "AXS", "EGLD", "THETA", "FLOW", "KAVA", "CHZ", "CRV", "SNX", "COMP", "ZEC",
-                "DASH", "ENJ", "BAT", "ZIL", "ONE", "IOTA", "NEO", "QTUM", "OMG", "WAVES"]
+                "TRX", "MATIC", "SHIB", "LTC", "BCH", "UNI", "ATOM", "XLM", "ETC", "FIL"]
 
 
 def fetch_ohlcv(exchange, symbol, timeframe='1h', limit=100):
@@ -87,7 +73,6 @@ def get_spot_signal(df):
     if pd.isna(last['rsi']) or pd.isna(last['ema20']) or pd.isna(last['ema50']):
         return None
     
-    # Рассчитываем ATR (14) для определения уровней
     atr = ta.atr(df['high'], df['low'], df['close'], length=14).iloc[-1]
     if pd.isna(atr):
         return None
@@ -95,15 +80,9 @@ def get_spot_signal(df):
     price = last['close']
     
     if last['rsi'] < 30 and last['ema20'] > last['ema50']:
-        # Сигнал BUY
-        sl = price - atr * 1.5
-        tp = price + atr * 3.0
-        return {"signal": "BUY", "entry": price, "sl": sl, "tp": tp}
+        return {"signal": "BUY", "entry": price, "sl": price - atr * 1.5, "tp": price + atr * 3.0}
     elif last['rsi'] > 70 and last['ema20'] < last['ema50']:
-        # Сигнал SELL
-        sl = price + atr * 1.5
-        tp = price - atr * 3.0
-        return {"signal": "SELL", "entry": price, "sl": sl, "tp": tp}
+        return {"signal": "SELL", "entry": price, "sl": price + atr * 1.5, "tp": price - atr * 3.0}
     return None
 
 
@@ -123,19 +102,17 @@ def get_futures_signal(df):
 async def check_and_send_signals():
     """Главная функция проверки и отправки сигналов."""
     state = load_state()
-        # Создаём клавиатуру с реферальными ссылками
-    keyboard = InlineKeyboardMarkup(
+    new_state = state.copy()
+
+    # Создаём клавиатуру с реферальными ссылками (используем types.)
+    keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="📈 Торговать на бирже", url="https://твоя-реф-ссылка.com"),
-                InlineKeyboardButton(text="📰 Новости", url="https://твой-новостной-сервис.com")
-            ],
-            [
-                InlineKeyboardButton(text="💬 Чат трейдеров", url="https://t.me/твой_чат")
+                types.InlineKeyboardButton(text="📈 Торговать на бирже", url="https://твоя-реф-ссылка.com"),
+                types.InlineKeyboardButton(text="📰 Новости", url="https://твой-новостной-сервис.com")
             ]
         ]
     )
-    new_state = state.copy()
 
     # ── 1. Спот сигналы (топ-100 монет) ──
     symbols = get_top_100_symbols()
@@ -169,7 +146,6 @@ async def check_and_send_signals():
                 f"#спот #{sym.lower()}"
             )
             try:
-                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
                 await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
                 print(f"  ✅ {sym}: {old_signal} -> {current_signal}")
             except Exception as e:
@@ -215,17 +191,7 @@ async def check_and_send_signals():
         await asyncio.sleep(1)
 
     save_state(new_state)
-    print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена. Следующая через час.")
-
-
-#async def background_loop():
-#    """Бесконечный цикл: проверяет сигналы каждый час."""
-#   while True:
-#        try:
-#            await check_and_send_signals()
-#        except Exception as e:
-#            print(f"Ошибка в цикле: {e}")
-#        await asyncio.sleep(3600)  # 1 час
+    print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена.")
 
 
 # ── Команды для управления ботом (в личке бота) ──
@@ -233,7 +199,7 @@ async def check_and_send_signals():
 async def cmd_start(message: types.Message):
     await message.answer(
         "🤖 Я бот для отправки сигналов.\n"
-        "Работаю автоматически, проверяю рынок каждый час.\n\n"
+        "Работаю автоматически на GitHub Actions.\n\n"
         f"Канал: {CHANNEL_ID}"
     )
 
@@ -251,7 +217,7 @@ async def main():
     print("🤖 Запуск проверки сигналов (GitHub Actions режим).")
     print(f"📢 Канал: {CHANNEL_ID}")
     
-    # Просто запускаем проверку один раз
+    # Запускаем проверку один раз
     await check_and_send_signals()
 
 if __name__ == "__main__":
