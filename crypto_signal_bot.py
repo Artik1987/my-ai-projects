@@ -21,7 +21,11 @@ CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 spot_exchange = ccxt.binance({'enableRateLimit': True})
 futures_exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
 
+# ── Настройки ──
 STATE_FILE = "signals_state.json"
+DEPOSIT = 1000      # Дефолтный депозит для примера
+RISK_PERCENT = 1    # Риск на сделку в %
+LEVERAGE = 20       # Плечо
 
 
 def load_state():
@@ -87,16 +91,40 @@ def get_spot_signal(df):
 
 
 def get_futures_signal(df):
-    """Генерирует фьючерсный сигнал с уровнями TP и SL."""
+    """Генерирует фьючерсный сигнал с уровнями TP, SL и расчётом позиции."""
     last = df.iloc[-1]
     if pd.isna(last['rsi']) or pd.isna(last['ema20']) or pd.isna(last['ema50']):
         return None
     price = last['close']
+    
     if last['rsi'] < 40 and last['ema20'] > last['ema50'] and price > last['ema20']:
-        return {"signal": "LONG", "entry": price, "sl": price * 0.98, "tp": price * 1.04}
+        signal = "LONG"
+        sl = price * 0.98
+        tp = price * 1.04
     elif last['rsi'] > 60 and last['ema20'] < last['ema50'] and price < last['ema20']:
-        return {"signal": "SHORT", "entry": price, "sl": price * 1.02, "tp": price * 0.96}
-    return None
+        signal = "SHORT"
+        sl = price * 1.02
+        tp = price * 0.96
+    else:
+        return None
+
+    # Расчёт риск-менеджмента
+    risk_amount = DEPOSIT * (RISK_PERCENT / 100)
+    price_diff = abs(price - sl)
+    
+    if price_diff == 0:
+        return None
+        
+    position_size = risk_amount / price_diff
+
+    return {
+        "signal": signal, 
+        "entry": price, 
+        "sl": sl, 
+        "tp": tp, 
+        "diff": price_diff, 
+        "size": position_size
+    }
 
 
 async def check_and_send_signals():
@@ -104,7 +132,7 @@ async def check_and_send_signals():
     state = load_state()
     new_state = state.copy()
 
-    # Создаём клавиатуру с реферальными ссылками (используем types.)
+    # Создаём клавиатуру с реферальными ссылками
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -154,7 +182,7 @@ async def check_and_send_signals():
         new_state[key] = current_signal
         await asyncio.sleep(0.6)
 
-    # ── 2. Фьючерсные сигналы (BTC, ETH) ──
+    # ── 2. Фьючерсные сигналы (BTC, ETH) в VIP-формате ──
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для BTC, ETH...")
 
     for sym in ["BTC", "ETH"]:
@@ -170,17 +198,25 @@ async def check_and_send_signals():
         current_signal = signal_data["signal"] if signal_data else "HOLD"
 
         if current_signal != old_signal and current_signal != "HOLD":
-            emoji = "📈" if current_signal == "LONG" else "📉"
-            action = "Открываем LONG" if current_signal == "LONG" else "Открываем SHORT"
+            direction_emoji = "📈" if current_signal == "LONG" else "📉"
+            risk_usd = DEPOSIT * RISK_PERCENT / 100
+            
             text = (
-                f"{emoji} <b>{current_signal} (FUTURES)</b>\n"
-                f"Монета: <b>{sym}/USDT</b>\n"
-                f"{action} по цене: <b>{signal_data['entry']:.2f}</b>\n"
-                f"🎯 Цель (тейк-профит): <b>{signal_data['tp']:.2f}</b>\n"
-                f"🛑 Стоп-лосс: <b>{signal_data['sl']:.2f}</b>\n"
-                f"RSI: {df['rsi'].iloc[-1]:.1f}\n"
-                f"#фьючерс #{sym.lower()}"
+                f"<b>SHARK FUTURES | VIP 🦈🔒</b>\n"
+                f"#{sym} {current_signal} {direction_emoji}\n\n"
+                f"Плечо: <b>{LEVERAGE}x</b>\n\n"
+                f"Вход: <b>{signal_data['entry']:.4f}</b> (MARKET)\n\n"
+                f"Тр:\n<b>{signal_data['tp']:.4f}</b>\n\n"
+                f"Stop:\n<b>{signal_data['sl']:.4f}</b>\n\n"
+                f"Риск высокий!\n\n"
+                f"❗️ <b>Примечание</b> ❗️\n\n"
+                f"Депо: {DEPOSIT}$\n"
+                f"Риск на сделку {RISK_PERCENT}% (это {risk_usd:.0f}$ от {DEPOSIT}$)\n\n"
+                f"{signal_data['entry']:.4f} - {signal_data['sl']:.4f} = <b>{signal_data['diff']:.4f}</b>\n\n"
+                f"{risk_usd:.0f}$ / {signal_data['diff']:.4f} = <b>{signal_data['size']:.0f} монет</b> понадобится для открытия позиции\n\n"
+                f"Далее необходимо подставить свой депозит и риск и разделить это на {signal_data['diff']:.4f} и Вы получите нужное количество монет для открытия позиции!"
             )
+            
             try:
                 await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
                 print(f"  ✅ {sym}: {old_signal} -> {current_signal}")

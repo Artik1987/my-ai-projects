@@ -1,11 +1,15 @@
-# health_timer.py — полная версия с вкладками
+# health_timer.py — полная версия с вкладками и звуком
 import customtkinter as ctk
 import time
 import json
 import os
+import winsound  # <-- Добавлено для звука
 from datetime import date, datetime
 from plyer import notification
-from health_db import get_recipes, get_exercises
+from health_db import init_db, seed_db, get_recipes, get_exercises, add_recipe
+init_db()
+seed_db()  # <-- Заполняет примерами, если база пустая
+
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -13,6 +17,14 @@ ctk.set_default_color_theme("blue")
 app = ctk.CTk()
 app.title("Health App")
 app.geometry("750x650")
+
+# ── Функция звукового уведомления ──
+def play_sound():
+    try:
+        # Воспроизводит системный звук (работает только на Windows)
+        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+    except Exception as e:
+        print(f"Звук не сработал: {e}")
 
 # Создаём вкладки
 tabview = ctk.CTkTabview(app, width=730, height=620)
@@ -165,6 +177,9 @@ def start_break():
     update_stats_display()
     status_label.configure(text="🔔 Пора сделать разминку!", text_color="#F44336")
     timer_label.configure(text="ПЕРЕРЫВ", text_color="#F44336")
+    
+    play_sound() # <-- Звук при перерыве
+    
     try:
         notification.notify(title="Health Timer", message=f"Вы проработали {format_time(elapsed)}. Пора размяться!", timeout=10)
     except Exception as e:
@@ -208,6 +223,9 @@ def show_meal_window():
     meal_window.title("Пора перекусить!")
     meal_window.geometry("600x350")
     meal_window.grab_set()
+    
+    play_sound() # <-- Звук при перекусе
+    
     ctk.CTkLabel(meal_window, text="🍏 Время для полезного перекуса!", font=("Arial", 24, "bold"), text_color="#00BCD4").pack(pady=20)
     day_index = date.today().day - 1
     snack = SNACKS[day_index % len(SNACKS)]
@@ -273,6 +291,40 @@ food_frame.pack(fill="both", expand=True)
 
 ctk.CTkLabel(food_frame, text="🍏 Питание", font=("Arial", 24, "bold")).pack(pady=10)
 
+# Форма добавления рецепта
+add_frame = ctk.CTkFrame(food_frame)
+add_frame.pack(pady=10, fill="x", padx=20)
+
+ctk.CTkLabel(add_frame, text="➕ Добавить свой рецепт:", font=("Arial", 14, "bold")).pack(anchor="w")
+
+name_entry = ctk.CTkEntry(add_frame, placeholder_text="Название (например, Овсянка)")
+name_entry.pack(fill="x", pady=2)
+
+ing_entry = ctk.CTkEntry(add_frame, placeholder_text="Ингредиенты (через запятую)")
+ing_entry.pack(fill="x", pady=2)
+
+cal_entry = ctk.CTkEntry(add_frame, placeholder_text="Калории (число)")
+cal_entry.pack(fill="x", pady=2)
+
+cat_add_var = ctk.StringVar(value="завтрак")
+cat_add_menu = ctk.CTkOptionMenu(add_frame, values=["завтрак", "обед", "перекус", "ужин"], variable=cat_add_var)
+cat_add_menu.pack(pady=5)
+
+def add_new_recipe():
+    name = name_entry.get()
+    ing = ing_entry.get()
+    cal = cal_entry.get()
+    cat = cat_add_var.get()
+    
+    if name and cal.isdigit():
+        add_recipe(name, ing, int(cal), cat)
+        name_entry.delete(0, 'end')
+        ing_entry.delete(0, 'end')
+        cal_entry.delete(0, 'end')
+        show_recipes()
+
+ctk.CTkButton(add_frame, text="Сохранить рецепт", command=add_new_recipe).pack(pady=5)
+
 # Выбор категории
 cat_frame = ctk.CTkFrame(food_frame, fg_color="transparent")
 cat_frame.pack(pady=5)
@@ -286,7 +338,6 @@ prod_frame = ctk.CTkFrame(food_frame)
 prod_frame.pack(pady=10)
 ctk.CTkLabel(prod_frame, text="Выберите продукты:", font=("Arial", 14)).pack(anchor="w")
 
-# Отдельный контейнер для чекбоксов, чтобы не смешивать pack и grid
 cb_container = ctk.CTkFrame(prod_frame, fg_color="transparent")
 cb_container.pack()
 
@@ -311,14 +362,13 @@ def show_recipes():
     for rec in recipes:
         id_, name, ingredients, calories, cat = rec
         if selected_products:
-            # Проверяем, есть ли хотя бы один выбранный продукт в ингредиентах
             if not any(prod.lower() in ingredients.lower() for prod in selected_products):
                 continue
         text = f"{name} — {calories} ккал\n{ingredients}"
         ctk.CTkLabel(recipes_frame, text=text, wraplength=600, justify="left", anchor="w").pack(fill="x", pady=5)
 
 ctk.CTkButton(food_frame, text="🔍 Подобрать рецепты", command=show_recipes).pack(pady=5)
-show_recipes()  # Показать при запуске
+show_recipes()
 
 # ========== ВКЛАДКА УПРАЖНЕНИЯ ==========
 exercise_frame = ctk.CTkFrame(tab_exercise)
@@ -326,7 +376,6 @@ exercise_frame.pack(fill="both", expand=True)
 
 ctk.CTkLabel(exercise_frame, text="🏋️ Упражнения", font=("Arial", 24, "bold")).pack(pady=10)
 
-# Выбор уровня и типа
 filter_frame = ctk.CTkFrame(exercise_frame)
 filter_frame.pack(pady=5)
 ctk.CTkLabel(filter_frame, text="Уровень:").pack(side="left", padx=5)
