@@ -151,7 +151,7 @@ async def send_status_if_due(coins_checked: int, futures_checked: int):
     text = (
         "✅ <b>Проверка завершена успешно</b>\n\n"
         f"📊 Просканировано монет: <b>{coins_checked}</b> (спот)\n"
-        f"📈 Проверено фьючерсов: <b>{futures_checked}</b> (BTC, ETH)\n\n"
+        f"📈 Проверено фьючерсов: <b>{futures_checked}</b> (Топ-30)\n\n"
         "🎯 <b>Хороших точек входа сейчас нет.</b>\n\n"
         "⏳ Следующая проверка через час.\n"
         "💡 Мы не завышаем риски ради сигнала — ждём идеальных условий по RSI и EMA."
@@ -230,10 +230,15 @@ async def check_and_send_signals():
         new_state[key] = current_signal
         await asyncio.sleep(0.6)
 
-    # ── 2. Фьючерсы ──
-    print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для BTC, ETH...")
+        # ── 2. Фьючерсы ──
+    # Берем топ-100, убираем стейблкоины и берем первые 30
+    top_100 = get_top_100_symbols()
+    stablecoins = {'USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDD', 'FDUSD'}
+    futures_symbols = [s for s in top_100 if s not in stablecoins][:30]
 
-    for sym in ["BTC", "ETH"]:
+    print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для {len(futures_symbols)} монет...")
+
+    for sym in futures_symbols:
         df = fetch_ohlcv(futures_exchange, f'{sym}/USDT:USDT')
         if df is None or len(df) < 50:
             continue
