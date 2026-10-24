@@ -21,8 +21,9 @@ CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 # ── Биржи ──
 spot_exchange = ccxt.binance({'enableRateLimit': True})
 futures_exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
-# Резервная биржа (если Binance заблокирует IP)
 kucoin_exchange = ccxt.kucoin({'enableRateLimit': True})
+# Резервная биржа для фьючерсов (если Binance блокирует IP)
+bybit_futures = ccxt.bybit({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 
 # ── Настройки ──
 STATE_FILE = "signals_state.json"
@@ -239,7 +240,13 @@ async def check_and_send_signals():
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для {len(futures_symbols)} монет...")
 
     for sym in futures_symbols:
+        # Пытаемся загрузить с Binance
         df = fetch_ohlcv(futures_exchange, f'{sym}/USDT:USDT')
+        
+        # Если Binance заблокировал — пробуем Bybit
+        if df is None:
+            df = fetch_ohlcv(bybit_futures, f'{sym}/USDT:USDT')
+            
         if df is None or len(df) < 50:
             continue
 
