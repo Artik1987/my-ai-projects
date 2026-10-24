@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import time
 import requests
 import pandas as pd
 import pandas_ta as ta
@@ -20,12 +21,15 @@ CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 # ── Биржи ──
 spot_exchange = ccxt.binance({'enableRateLimit': True})
 futures_exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
+# Резервная биржа (если Binance заблокирует IP)
+kucoin_exchange = ccxt.kucoin({'enableRateLimit': True})
 
 # ── Настройки ──
 STATE_FILE = "signals_state.json"
-DEPOSIT = 1000      # Дефолтный депозит для примера
-RISK_PERCENT = 1    # Риск на сделку в %
-LEVERAGE = 20       # Плечо
+STATUS_FILE = "last_status.txt"
+DEPOSIT = 1000
+RISK_PERCENT = 1
+LEVERAGE = 20
 
 
 def load_state():
@@ -59,7 +63,8 @@ def fetch_ohlcv(exchange, symbol, timeframe='1h', limit=100):
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         return df
-    except Exception:
+    except Exception as e:
+        print(f"    ⚠️ Ошибка загрузки {symbol}: {e}")
         return None
 
 
@@ -108,7 +113,6 @@ def get_futures_signal(df):
     else:
         return None
 
-    # Расчёт риск-менеджмента
     risk_amount = DEPOSIT * (RISK_PERCENT / 100)
     price_diff = abs(price - sl)
     
@@ -127,12 +131,50 @@ def get_futures_signal(df):
     }
 
 
+async def send_status_if_due(coins_checked: int, futures_checked: int):
+    """Отправляет статус 'нет хороших точек входа' не чаще раза в 4 часа."""
+    STATUS_INTERVAL_HOURS = 4
+
+    last_status_ts = 0
+    if os.path.exists(STATUS_FILE):
+        try:
+            with open(STATUS_FILE, "r") as f:
+                last_status_ts = float(f.read().strip())
+        except Exception:
+            pass
+
+    hours_passed = (time.time() - last_status_ts) / 3600
+    if hours_passed < STATUS_INTERVAL_HOURS:
+        print(f"  Статус не отправляем (последний был {hours_passed:.1f} ч назад)")
+        return
+
+    text = (
+        "✅ <b>Проверка завершена успешно</b>\n\n"
+        f"📊 Просканировано монет: <b>{coins_checked}</b> (спот)\n"
+        f"📈 Проверено фьючерсов: <b>{futures_checked}</b> (BTC, ETH)\n\n"
+        "🎯 <b>Хороших точек входа сейчас нет.</b>\n\n"
+        "⏳ Следующая проверка через час.\n"
+        "💡 Мы не завышаем риски ради сигнала — ждём идеальных условий по RSI и EMA."
+    )
+
+    try:
+        await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML")
+        with open(STATUS_FILE, "w") as f:
+            f.write(str(time.time()))
+        print("  ✅ Статус отправлен в канал")
+    except Exception as e:
+        print(f"  ❌ Не удалось отправить статус: {e}")
+
+
 async def check_and_send_signals():
     """Главная функция проверки и отправки сигналов."""
     state = load_state()
     new_state = state.copy()
+    signals_sent = 0
+    coins_checked = 0
+    futures_checked = 0
 
-    # Создаём клавиатуру с реферальными ссылками
+    # Клавиатура с реф-ссылками
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -142,7 +184,7 @@ async def check_and_send_signals():
         ]
     )
 
-    # ── 1. Спот сигналы (топ-100 монет) ──
+    # ── 1. Спот ──
     symbols = get_top_100_symbols()
     stablecoins = {'USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDD', 'FDUSD'}
     symbols = [s for s in symbols if s not in stablecoins]
@@ -151,17 +193,21 @@ async def check_and_send_signals():
 
     for sym in symbols:
         df = fetch_ohlcv(spot_exchange, f'{sym}/USDT')
+        if df is None:
+            df = fetch_ohlcv(kucoin_exchange, f'{sym}/USDT')
         if df is None or len(df) < 50:
             continue
 
+        coins_checked += 1
         df = calculate_indicators(df)
         signal_data = get_spot_signal(df)
+
+        print(f"  {sym}: RSI={df['rsi'].iloc[-1]:.1f}, EMA20={df['ema20'].iloc[-1]:.4f}, EMA50={df['ema50'].iloc[-1]:.4f}")
 
         key = f"{sym}_SPOT"
         old_signal = state.get(key, "HOLD")
         current_signal = signal_data["signal"] if signal_data else "HOLD"
-                # Диагностика — печатаем RSI и EMA для каждой монеты
-        print(f"  {sym}: RSI={df['rsi'].iloc[-1]:.1f}, EMA20={df['ema20'].iloc[-1]:.4f}, EMA50={df['ema50'].iloc[-1]:.4f}")
+
         if current_signal != old_signal and current_signal != "HOLD":
             emoji = "🟢" if current_signal == "BUY" else "🔴"
             action = "Покупаем" if current_signal == "BUY" else "Продаем"
@@ -177,13 +223,14 @@ async def check_and_send_signals():
             try:
                 await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
                 print(f"  ✅ {sym}: {old_signal} -> {current_signal}")
+                signals_sent += 1
             except Exception as e:
                 print(f"  ❌ Не удалось отправить сообщение для {sym}: {e}")
 
         new_state[key] = current_signal
         await asyncio.sleep(0.6)
 
-    # ── 2. Фьючерсные сигналы (BTC, ETH) в VIP-формате ──
+    # ── 2. Фьючерсы ──
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для BTC, ETH...")
 
     for sym in ["BTC", "ETH"]:
@@ -191,17 +238,17 @@ async def check_and_send_signals():
         if df is None or len(df) < 50:
             continue
 
+        futures_checked += 1
         df = calculate_indicators(df)
         signal_data = get_futures_signal(df)
 
         key = f"{sym}_FUTURES"
         old_signal = state.get(key, "HOLD")
         current_signal = signal_data["signal"] if signal_data else "HOLD"
-        print(f"  {sym} FUTURES: RSI={df['rsi'].iloc[-1]:.1f}, EMA20={df['ema20'].iloc[-1]:.4f}, EMA50={df['ema50'].iloc[-1]:.4f}, цена={df['close'].iloc[-1]:.2f}")
+
         if current_signal != old_signal and current_signal != "HOLD":
             direction_emoji = "📈" if current_signal == "LONG" else "📉"
             risk_usd = DEPOSIT * RISK_PERCENT / 100
-            
             text = (
                 f"<b>SHARK FUTURES | VIP 🦈🔒</b>\n"
                 f"#{sym} {current_signal} {direction_emoji}\n\n"
@@ -214,21 +261,24 @@ async def check_and_send_signals():
                 f"Депо: {DEPOSIT}$\n"
                 f"Риск на сделку {RISK_PERCENT}% (это {risk_usd:.0f}$ от {DEPOSIT}$)\n\n"
                 f"{signal_data['entry']:.4f} - {signal_data['sl']:.4f} = <b>{signal_data['diff']:.4f}</b>\n\n"
-                f"{risk_usd:.0f}$ / {signal_data['diff']:.4f} = <b>{signal_data['size']:.0f} монет</b> понадобится для открытия позиции\n\n"
-                f"Далее необходимо подставить свой депозит и риск и разделить это на {signal_data['diff']:.4f} и Вы получите нужное количество монет для открытия позиции!"
+                f"{risk_usd:.0f}$ / {signal_data['diff']:.4f} = <b>{signal_data['size']:.0f} монет</b> понадобится для открытия позиции"
             )
-            
             try:
                 await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
                 print(f"  ✅ {sym}: {old_signal} -> {current_signal}")
+                signals_sent += 1
             except Exception as e:
                 print(f"  ❌ Не удалось отправить сообщение для {sym}: {e}")
 
         new_state[key] = current_signal
         await asyncio.sleep(1)
 
+    # ── 3. Статус, если сигналов не было ──
+    if signals_sent == 0:
+        await send_status_if_due(coins_checked, futures_checked)
+
     save_state(new_state)
-    print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена.")
+    print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена. Сигналов отправлено: {signals_sent}")
 
 
 # ── Команды для управления ботом (в личке бота) ──
@@ -254,7 +304,6 @@ async def main():
     print("🤖 Запуск проверки сигналов (GitHub Actions режим).")
     print(f"📢 Канал: {CHANNEL_ID}")
     
-    # Запускаем проверку один раз
     await check_and_send_signals()
 
 if __name__ == "__main__":
