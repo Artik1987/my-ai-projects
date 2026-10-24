@@ -197,7 +197,7 @@ async def check_and_send_signals():
         # Пробуем KuCoin, потом Gate.io
         df = fetch_ohlcv(kucoin_spot, f'{sym}/USDT')
         if df is None:
-            df = fetch_ohlcv(gateio_spot, f'{sym}/USDT')
+            df = fetch_ohlcv(gate_spot, f'{sym}/USDT')
         if df is None or len(df) < 50:
             continue
 
@@ -241,7 +241,7 @@ async def check_and_send_signals():
         # Пробуем KuCoin Futures, потом Gate.io Futures
         df = fetch_ohlcv(kucoin_futures, f'{sym}/USDT:USDT')
         if df is None:
-            df = fetch_ohlcv(gateio_futures, f'{sym}/USDT:USDT')
+            df = fetch_ohlcv(gate_futures, f'{sym}/USDT:USDT')
         if df is None or len(df) < 50:
             continue
 
