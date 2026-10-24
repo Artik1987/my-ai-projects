@@ -22,8 +22,8 @@ CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 spot_exchange = ccxt.binance({'enableRateLimit': True})
 futures_exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
 kucoin_exchange = ccxt.kucoin({'enableRateLimit': True})
-# Резервная биржа для фьючерсов (если Binance блокирует IP)
 bybit_futures = ccxt.bybit({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
+okx_futures = ccxt.okx({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 
 # ── Настройки ──
 STATE_FILE = "signals_state.json"
@@ -46,7 +46,6 @@ def save_state(state):
 
 
 def get_top_100_symbols():
-    """Возвращает список тикеров топ-100 монет по капитализации."""
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 100, "page": 1}
     try:
@@ -54,23 +53,19 @@ def get_top_100_symbols():
         return [c["symbol"].upper() for c in r.json()]
     except Exception as e:
         print(f"Ошибка CoinGecko: {e}")
-        return ["BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "AVAX", "DOGE", "DOT", "LINK",
-                "TRX", "MATIC", "SHIB", "LTC", "BCH", "UNI", "ATOM", "XLM", "ETC", "FIL"]
+        return ["BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "AVAX", "DOGE", "DOT", "LINK"]
 
 
 def fetch_ohlcv(exchange, symbol, timeframe='1h', limit=100):
-    """Загружает свечи с биржи."""
     try:
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         return df
     except Exception as e:
-        print(f"    ⚠️ Ошибка загрузки {symbol}: {e}")
         return None
 
 
 def calculate_indicators(df):
-    """Добавляет RSI и EMA в DataFrame."""
     df['rsi'] = ta.rsi(df['close'], length=14)
     df['ema20'] = ta.ema(df['close'], length=20)
     df['ema50'] = ta.ema(df['close'], length=50)
@@ -78,7 +73,6 @@ def calculate_indicators(df):
 
 
 def get_spot_signal(df):
-    """Генерирует спотовый сигнал с уровнями TP и SL на основе ATR."""
     last = df.iloc[-1]
     if pd.isna(last['rsi']) or pd.isna(last['ema20']) or pd.isna(last['ema50']):
         return None
@@ -97,7 +91,6 @@ def get_spot_signal(df):
 
 
 def get_futures_signal(df):
-    """Генерирует фьючерсный сигнал с уровнями TP, SL и расчётом позиции."""
     last = df.iloc[-1]
     if pd.isna(last['rsi']) or pd.isna(last['ema20']) or pd.isna(last['ema50']):
         return None
@@ -133,7 +126,6 @@ def get_futures_signal(df):
 
 
 async def send_status_if_due(coins_checked: int, futures_checked: int):
-    """Отправляет статус 'нет хороших точек входа' не чаще раза в 4 часа."""
     STATUS_INTERVAL_HOURS = 4
 
     last_status_ts = 0
@@ -168,14 +160,12 @@ async def send_status_if_due(coins_checked: int, futures_checked: int):
 
 
 async def check_and_send_signals():
-    """Главная функция проверки и отправки сигналов."""
     state = load_state()
     new_state = state.copy()
     signals_sent = 0
     coins_checked = 0
     futures_checked = 0
 
-    # Клавиатура с реф-ссылками
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -203,8 +193,6 @@ async def check_and_send_signals():
         df = calculate_indicators(df)
         signal_data = get_spot_signal(df)
 
-        print(f"  {sym}: RSI={df['rsi'].iloc[-1]:.1f}, EMA20={df['ema20'].iloc[-1]:.4f}, EMA50={df['ema50'].iloc[-1]:.4f}")
-
         key = f"{sym}_SPOT"
         old_signal = state.get(key, "HOLD")
         current_signal = signal_data["signal"] if signal_data else "HOLD"
@@ -231,21 +219,21 @@ async def check_and_send_signals():
         new_state[key] = current_signal
         await asyncio.sleep(0.6)
 
-        # ── 2. Фьючерсы ──
-    # Берем топ-100, убираем стейблкоины и берем первые 30
+    # ── 2. Фьючерсы ──
     top_100 = get_top_100_symbols()
-    stablecoins = {'USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDD', 'FDUSD'}
     futures_symbols = [s for s in top_100 if s not in stablecoins][:30]
 
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для {len(futures_symbols)} монет...")
 
     for sym in futures_symbols:
-        # Пытаемся загрузить с Binance
+        # Пытаемся Binance
         df = fetch_ohlcv(futures_exchange, f'{sym}/USDT:USDT')
-        
-        # Если Binance заблокировал — пробуем Bybit
+        # Если нет — Bybit
         if df is None:
             df = fetch_ohlcv(bybit_futures, f'{sym}/USDT:USDT')
+        # Если нет — OKX
+        if df is None:
+            df = fetch_ohlcv(okx_futures, f'{sym}/USDT:USDT')
             
         if df is None or len(df) < 50:
             continue
@@ -285,7 +273,7 @@ async def check_and_send_signals():
         new_state[key] = current_signal
         await asyncio.sleep(1)
 
-    # ── 3. Статус, если сигналов не было ──
+    # ── 3. Статус ──
     if signals_sent == 0:
         await send_status_if_due(coins_checked, futures_checked)
 
@@ -293,7 +281,6 @@ async def check_and_send_signals():
     print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена. Сигналов отправлено: {signals_sent}")
 
 
-# ── Команды для управления ботом (в личке бота) ──
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
@@ -301,7 +288,6 @@ async def cmd_start(message: types.Message):
         "Работаю автоматически на GitHub Actions.\n\n"
         f"Канал: {CHANNEL_ID}"
     )
-
 
 @dp.message(Command("status"))
 async def cmd_status(message: types.Message):
