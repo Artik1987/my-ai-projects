@@ -62,6 +62,8 @@ def fetch_ohlcv(exchange, symbol, timeframe='1h', limit=100):
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         return df
     except Exception as e:
+        # Печатаем ошибку, чтобы понять, что сломано
+        print(f"    ⚠️ Ошибка {symbol}: {str(e)[:100]}")
         return None
 
 
@@ -219,22 +221,31 @@ async def check_and_send_signals():
         new_state[key] = current_signal
         await asyncio.sleep(0.6)
 
-    # ── 2. Фьючерсы ──
+        # ── 2. Фьючерсы ──
     top_100 = get_top_100_symbols()
     futures_symbols = [s for s in top_100 if s not in stablecoins][:30]
 
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для {len(futures_symbols)} монет...")
 
     for sym in futures_symbols:
-        # Пытаемся Binance
-        df = fetch_ohlcv(futures_exchange, f'{sym}/USDT:USDT')
-        # Если нет — Bybit
+        df = None
+        
+        # Вариант 1: Пробуем Bybit (он лучше работает с GitHub)
+        df = fetch_ohlcv(bybit_futures, f'{sym}/USDT:USDT')
         if df is None:
-            df = fetch_ohlcv(bybit_futures, f'{sym}/USDT:USDT')
-        # Если нет — OKX
+            df = fetch_ohlcv(bybit_futures, f'1000{sym}/USDT:USDT')
+            
+        # Вариант 2: Если Bybit не дал, пробуем Binance
+        if df is None:
+            df = fetch_ohlcv(futures_exchange, f'{sym}/USDT:USDT')
+        if df is None:
+            df = fetch_ohlcv(futures_exchange, f'1000{sym}/USDT:USDT')
+            
+        # Вариант 3: Если ничего не вышло, пробуем OKX
         if df is None:
             df = fetch_ohlcv(okx_futures, f'{sym}/USDT:USDT')
             
+        # Если данных нет ни с одной биржи — пропускаем
         if df is None or len(df) < 50:
             continue
 
@@ -271,14 +282,7 @@ async def check_and_send_signals():
                 print(f"  ❌ Не удалось отправить сообщение для {sym}: {e}")
 
         new_state[key] = current_signal
-        await asyncio.sleep(1)
-
-    # ── 3. Статус ──
-    if signals_sent == 0:
-        await send_status_if_due(coins_checked, futures_checked)
-
-    save_state(new_state)
-    print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена. Сигналов отправлено: {signals_sent}")
+        await asyncio.sleep(0.5)
 
 
 @dp.message(Command("start"))
