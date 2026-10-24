@@ -160,7 +160,8 @@ async def check_and_send_signals():
         key = f"{sym}_SPOT"
         old_signal = state.get(key, "HOLD")
         current_signal = signal_data["signal"] if signal_data else "HOLD"
-
+                # Диагностика — печатаем RSI и EMA для каждой монеты
+        print(f"  {sym}: RSI={df['rsi'].iloc[-1]:.1f}, EMA20={df['ema20'].iloc[-1]:.4f}, EMA50={df['ema50'].iloc[-1]:.4f}")
         if current_signal != old_signal and current_signal != "HOLD":
             emoji = "🟢" if current_signal == "BUY" else "🔴"
             action = "Покупаем" if current_signal == "BUY" else "Продаем"
@@ -196,7 +197,7 @@ async def check_and_send_signals():
         key = f"{sym}_FUTURES"
         old_signal = state.get(key, "HOLD")
         current_signal = signal_data["signal"] if signal_data else "HOLD"
-
+        print(f"  {sym} FUTURES: RSI={df['rsi'].iloc[-1]:.1f}, EMA20={df['ema20'].iloc[-1]:.4f}, EMA50={df['ema50'].iloc[-1]:.4f}, цена={df['close'].iloc[-1]:.2f}")
         if current_signal != old_signal and current_signal != "HOLD":
             direction_emoji = "📈" if current_signal == "LONG" else "📉"
             risk_usd = DEPOSIT * RISK_PERCENT / 100
