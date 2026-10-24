@@ -24,8 +24,8 @@ kucoin_spot = ccxt.kucoin({'enableRateLimit': True})
 # KuCoin Futures для фьючерсов
 kucoin_futures = ccxt.kucoinfutures({'enableRateLimit': True})
 # Gate.io как запасной вариант
-gateio_spot = ccxt.gateio({'enableRateLimit': True})
-gateio_futures = ccxt.gateio({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
+gate_spot = ccxt.gate({'enableRateLimit': True})
+gate_futures = ccxt.gate({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 
 # ── Настройки ──
 STATE_FILE = "signals_state.json"
