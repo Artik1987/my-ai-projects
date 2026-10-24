@@ -18,12 +18,14 @@ bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
 dp = Dispatcher()
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
-# ── Биржи ──
-spot_exchange = ccxt.binance({'enableRateLimit': True})
-futures_exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
-kucoin_exchange = ccxt.kucoin({'enableRateLimit': True})
-bybit_futures = ccxt.bybit({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
-okx_futures = ccxt.okx({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
+# ── Биржи (те, что не блокируют GitHub) ──
+# KuCoin для спота (работает)
+kucoin_spot = ccxt.kucoin({'enableRateLimit': True})
+# KuCoin Futures для фьючерсов
+kucoin_futures = ccxt.kucoinfutures({'enableRateLimit': True})
+# Gate.io как запасной вариант
+gateio_spot = ccxt.gateio({'enableRateLimit': True})
+gateio_futures = ccxt.gateio({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 
 # ── Настройки ──
 STATE_FILE = "signals_state.json"
@@ -62,8 +64,7 @@ def fetch_ohlcv(exchange, symbol, timeframe='1h', limit=100):
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         return df
     except Exception as e:
-        # Печатаем ошибку, чтобы понять, что сломано
-        print(f"    ⚠️ Ошибка {symbol}: {str(e)[:100]}")
+        # Не печатаем ошибку, чтобы не засорять лог
         return None
 
 
@@ -141,6 +142,10 @@ async def send_status_if_due(coins_checked: int, futures_checked: int):
     hours_passed = (time.time() - last_status_ts) / 3600
     if hours_passed < STATUS_INTERVAL_HOURS:
         print(f"  Статус не отправляем (последний был {hours_passed:.1f} ч назад)")
+        # Создаём файл, чтобы коммит не падал
+        if not os.path.exists(STATUS_FILE):
+            with open(STATUS_FILE, "w") as f:
+                f.write("0")
         return
 
     text = (
@@ -159,6 +164,10 @@ async def send_status_if_due(coins_checked: int, futures_checked: int):
         print("  ✅ Статус отправлен в канал")
     except Exception as e:
         print(f"  ❌ Не удалось отправить статус: {e}")
+        # Создаём файл, чтобы коммит не падал
+        if not os.path.exists(STATUS_FILE):
+            with open(STATUS_FILE, "w") as f:
+                f.write("0")
 
 
 async def check_and_send_signals():
@@ -177,7 +186,7 @@ async def check_and_send_signals():
         ]
     )
 
-    # ── 1. Спот ──
+    # ── 1. Спот (KuCoin + Gate.io) ──
     symbols = get_top_100_symbols()
     stablecoins = {'USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDD', 'FDUSD'}
     symbols = [s for s in symbols if s not in stablecoins]
@@ -185,9 +194,10 @@ async def check_and_send_signals():
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем спот для {len(symbols)} монет...")
 
     for sym in symbols:
-        df = fetch_ohlcv(spot_exchange, f'{sym}/USDT')
+        # Пробуем KuCoin, потом Gate.io
+        df = fetch_ohlcv(kucoin_spot, f'{sym}/USDT')
         if df is None:
-            df = fetch_ohlcv(kucoin_exchange, f'{sym}/USDT')
+            df = fetch_ohlcv(gateio_spot, f'{sym}/USDT')
         if df is None or len(df) < 50:
             continue
 
@@ -219,33 +229,19 @@ async def check_and_send_signals():
                 print(f"  ❌ Не удалось отправить сообщение для {sym}: {e}")
 
         new_state[key] = current_signal
-        await asyncio.sleep(0.6)
+        await asyncio.sleep(0.3)
 
-        # ── 2. Фьючерсы ──
+    # ── 2. Фьючерсы (KuCoin Futures + Gate.io Futures) ──
     top_100 = get_top_100_symbols()
     futures_symbols = [s for s in top_100 if s not in stablecoins][:30]
 
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для {len(futures_symbols)} монет...")
 
     for sym in futures_symbols:
-        df = None
-        
-        # Вариант 1: Пробуем Bybit (он лучше работает с GitHub)
-        df = fetch_ohlcv(bybit_futures, f'{sym}/USDT:USDT')
+        # Пробуем KuCoin Futures, потом Gate.io Futures
+        df = fetch_ohlcv(kucoin_futures, f'{sym}/USDT:USDT')
         if df is None:
-            df = fetch_ohlcv(bybit_futures, f'1000{sym}/USDT:USDT')
-            
-        # Вариант 2: Если Bybit не дал, пробуем Binance
-        if df is None:
-            df = fetch_ohlcv(futures_exchange, f'{sym}/USDT:USDT')
-        if df is None:
-            df = fetch_ohlcv(futures_exchange, f'1000{sym}/USDT:USDT')
-            
-        # Вариант 3: Если ничего не вышло, пробуем OKX
-        if df is None:
-            df = fetch_ohlcv(okx_futures, f'{sym}/USDT:USDT')
-            
-        # Если данных нет ни с одной биржи — пропускаем
+            df = fetch_ohlcv(gateio_futures, f'{sym}/USDT:USDT')
         if df is None or len(df) < 50:
             continue
 
@@ -283,6 +279,13 @@ async def check_and_send_signals():
 
         new_state[key] = current_signal
         await asyncio.sleep(0.5)
+
+    # ── 3. Статус ──
+    if signals_sent == 0:
+        await send_status_if_due(coins_checked, futures_checked)
+
+    save_state(new_state)
+    print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена. Сигналов отправлено: {signals_sent}")
 
 
 @dp.message(Command("start"))
