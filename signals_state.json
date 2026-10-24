@@ -66,5 +66,18 @@
   "STX_SPOT": "HOLD",
   "DASH_SPOT": "HOLD",
   "VET_SPOT": "HOLD",
-  "CRV_SPOT": "HOLD"
+  "CRV_SPOT": "HOLD",
+  "RAIN_SPOT": "HOLD",
+  "CC_SPOT": "HOLD",
+  "USDG_SPOT": "HOLD",
+  "PYUSD_SPOT": "HOLD",
+  "CRO_SPOT": "HOLD",
+  "MNT_SPOT": "HOLD",
+  "HTX_SPOT": "HOLD",
+  "VVV_SPOT": "HOLD",
+  "KCS_SPOT": "HOLD",
+  "KAS_SPOT": "HOLD",
+  "AKE_SPOT": "HOLD",
+  "XDC_SPOT": "HOLD",
+  "BDX_SPOT": "HOLD"
 }
