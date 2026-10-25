@@ -209,17 +209,26 @@ async def check_and_send_signals():
         current_signal = signal_data["signal"] if signal_data else "HOLD"
 
         if current_signal != old_signal and current_signal != "HOLD":
-            emoji = "🟢" if current_signal == "BUY" else "🔴"
-            action = "Покупаем" if current_signal == "BUY" else "Продаем"
-            text = (
-                f"{emoji} <b>{current_signal} (SPOT)</b>\n"
-                f"Монета: <b>{sym}/USDT</b>\n"
-                f"{action} сейчас по цене: <b>{signal_data['entry']:.4f}</b>\n"
-                f"🎯 Цель (тейк-профит): <b>{signal_data['tp']:.4f}</b>\n"
-                f"🛑 Стоп-лосс: <b>{signal_data['sl']:.4f}</b>\n"
-                f"RSI: {df['rsi'].iloc[-1]:.1f}\n"
-                f"#спот #{sym.lower()}"
-            )
+            if current_signal == "BUY":
+                text = (
+                    f"🟢 <b>BUY (SPOT)</b>\n"
+                    f"Монета: <b>{sym}/USDT</b>\n"
+                    f"🛒 Покупаем сейчас по цене: <b>{signal_data['entry']:.4f}</b>\n"
+                    f"🎯 Продаем (фиксируем прибыль): <b>{signal_data['tp']:.4f}</b>\n"
+                    f"🛑 Стоп-лосс: <b>{signal_data['sl']:.4f}</b>\n"
+                    f"RSI: {df['rsi'].iloc[-1]:.1f}\n"
+                    f"#спот #{sym.lower()}"
+                )
+            else: # SELL
+                text = (
+                    f"🔴 <b>SELL (SPOT)</b>\n"
+                    f"Монета: <b>{sym}/USDT</b>\n"
+                    f"💸 Продаем сейчас по цене: <b>{signal_data['entry']:.4f}</b>\n"
+                    f"🎯 Откупаем (фиксируем прибыль): <b>{signal_data['tp']:.4f}</b>\n"
+                    f"🛑 Стоп-лосс (если пойдет выше): <b>{signal_data['sl']:.4f}</b>\n"
+                    f"RSI: {df['rsi'].iloc[-1]:.1f}\n"
+                    f"#спот #{sym.lower()}"
+                )
             try:
                 await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
                 print(f"  ✅ {sym}: {old_signal} -> {current_signal}")
