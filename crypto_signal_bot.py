@@ -177,7 +177,7 @@ async def check_and_send_signals():
             [
                 types.InlineKeyboardButton(
                     text="🔗 Зарубежные биржи, где я торгую", 
-                    url="https://t.me/c/4496056121/17"
+                    url="https://t.me/c/4496056121/22"
                 )
             ],
             [
