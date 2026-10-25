@@ -19,11 +19,8 @@ dp = Dispatcher()
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
 # ── Биржи (те, что не блокируют GitHub) ──
-# KuCoin для спота (работает)
 kucoin_spot = ccxt.kucoin({'enableRateLimit': True})
-# KuCoin Futures для фьючерсов
 kucoin_futures = ccxt.kucoinfutures({'enableRateLimit': True})
-# Gate.io как запасной вариант
 gate_spot = ccxt.gate({'enableRateLimit': True})
 gate_futures = ccxt.gate({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 
@@ -63,8 +60,7 @@ def fetch_ohlcv(exchange, symbol, timeframe='1h', limit=100):
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         return df
-    except Exception as e:
-        # Не печатаем ошибку, чтобы не засорять лог
+    except Exception:
         return None
 
 
@@ -128,7 +124,7 @@ def get_futures_signal(df):
     }
 
 
-async def send_status_if_due(coins_checked: int, futures_checked: int):
+async def send_status_if_due(coins_checked: int, futures_checked: int, keyboard):
     STATUS_INTERVAL_HOURS = 4
 
     last_status_ts = 0
@@ -142,7 +138,6 @@ async def send_status_if_due(coins_checked: int, futures_checked: int):
     hours_passed = (time.time() - last_status_ts) / 3600
     if hours_passed < STATUS_INTERVAL_HOURS:
         print(f"  Статус не отправляем (последний был {hours_passed:.1f} ч назад)")
-        # Создаём файл, чтобы коммит не падал
         if not os.path.exists(STATUS_FILE):
             with open(STATUS_FILE, "w") as f:
                 f.write("0")
@@ -158,13 +153,12 @@ async def send_status_if_due(coins_checked: int, futures_checked: int):
     )
 
     try:
-        await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML")
+        await bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML", reply_markup=keyboard)
         with open(STATUS_FILE, "w") as f:
             f.write(str(time.time()))
         print("  ✅ Статус отправлен в канал")
     except Exception as e:
         print(f"  ❌ Не удалось отправить статус: {e}")
-        # Создаём файл, чтобы коммит не падал
         if not os.path.exists(STATUS_FILE):
             with open(STATUS_FILE, "w") as f:
                 f.write("0")
@@ -177,13 +171,13 @@ async def check_and_send_signals():
     coins_checked = 0
     futures_checked = 0
 
-        # Клавиатура с реф-ссылками
+    # Клавиатура с реф-ссылками
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
                     text="🔗 Зарубежные биржи, где я торгую", 
-                    url="https://t.me/c/4496056121/17"  # <-- ЗАМЕНИТЕ ЭТУ ССЫЛКУ
+                    url="https://t.me/c/4496056121/17"
                 )
             ],
             [
@@ -200,7 +194,6 @@ async def check_and_send_signals():
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем спот для {len(symbols)} монет...")
 
     for sym in symbols:
-        # Пробуем KuCoin, потом Gate.io
         df = fetch_ohlcv(kucoin_spot, f'{sym}/USDT')
         if df is None:
             df = fetch_ohlcv(gate_spot, f'{sym}/USDT')
@@ -244,7 +237,6 @@ async def check_and_send_signals():
     print(f"[{datetime.now().strftime('%H:%M')}] Проверяем фьючерсы для {len(futures_symbols)} монет...")
 
     for sym in futures_symbols:
-        # Пробуем KuCoin Futures, потом Gate.io Futures
         df = fetch_ohlcv(kucoin_futures, f'{sym}/USDT:USDT')
         if df is None:
             df = fetch_ohlcv(gate_futures, f'{sym}/USDT:USDT')
@@ -288,7 +280,7 @@ async def check_and_send_signals():
 
     # ── 3. Статус ──
     if signals_sent == 0:
-        await send_status_if_due(coins_checked, futures_checked)
+        await send_status_if_due(coins_checked, futures_checked, keyboard)
 
     save_state(new_state)
     print(f"[{datetime.now().strftime('%H:%M')}] Проверка завершена. Сигналов отправлено: {signals_sent}")
