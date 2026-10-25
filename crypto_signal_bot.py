@@ -177,11 +177,17 @@ async def check_and_send_signals():
     coins_checked = 0
     futures_checked = 0
 
+        # Клавиатура с реф-ссылками
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(text="📈 Торговать на бирже", url="https://твоя-реф-ссылка.com"),
-                types.InlineKeyboardButton(text="📰 Новости", url="https://твой-новостной-сервис.com")
+                types.InlineKeyboardButton(
+                    text="🔗 Зарубежные биржи, где я торгую", 
+                    url="https://t.me/c/4496056121/14"  # <-- ЗАМЕНИТЕ ЭТУ ССЫЛКУ
+                )
+            ],
+            [
+                types.InlineKeyboardButton(text="📰 Новости", url="https://t.me/ваш_новостной_канал")
             ]
         ]
     )
