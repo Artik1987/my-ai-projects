@@ -55,7 +55,7 @@
   "LIT_SPOT": "HOLD",
   "ATOM_SPOT": "HOLD",
   "FIL_SPOT": "HOLD",
-  "INJ_SPOT": "SELL",
+  "INJ_SPOT": "HOLD",
   "NEXO_SPOT": "HOLD",
   "AERO_SPOT": "HOLD",
   "ZRO_SPOT": "HOLD",
@@ -74,7 +74,7 @@
   "CRO_SPOT": "HOLD",
   "MNT_SPOT": "SELL",
   "HTX_SPOT": "HOLD",
-  "VVV_SPOT": "HOLD",
+  "VVV_SPOT": "SELL",
   "KCS_SPOT": "HOLD",
   "KAS_SPOT": "HOLD",
   "AKE_SPOT": "HOLD",
@@ -110,5 +110,6 @@
   "GRAM_FUTURES": "HOLD",
   "HBAR_FUTURES": "HOLD",
   "XAUT_FUTURES": "HOLD",
-  "PEARL_SPOT": "HOLD"
+  "PEARL_SPOT": "HOLD",
+  "PYTH_SPOT": "HOLD"
 }
