@@ -181,7 +181,7 @@ async def check_and_send_signals():
                 )
             ],
             [
-                types.InlineKeyboardButton(text="📰 Новости", url="https://t.me/ваш_новостной_канал")
+                types.InlineKeyboardButton(text="📰 Новости", url="https://t.me/forklog")
             ]
         ]
     )
