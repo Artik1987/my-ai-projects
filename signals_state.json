@@ -111,5 +111,6 @@
   "HBAR_FUTURES": "HOLD",
   "XAUT_FUTURES": "HOLD",
   "PEARL_SPOT": "HOLD",
-  "PYTH_SPOT": "HOLD"
+  "PYTH_SPOT": "HOLD",
+  "Q_SPOT": "HOLD"
 }
