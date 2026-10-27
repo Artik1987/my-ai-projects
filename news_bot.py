@@ -3,14 +3,20 @@ import feedparser
 import os
 import time
 import re
+import json
+import requests
 from dotenv import load_dotenv
 from aiogram import Bot
 import trafilatura
-from deep_translator import GoogleTranslator
 
 load_dotenv()
-bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+
+# ── Настройки ──
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("NEWS_CHANNEL_ID")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+bot = Bot(token=BOT_TOKEN)
 
 RSS_FEEDS = [
     "https://cointelegraph.com/rss",
@@ -21,6 +27,7 @@ RSS_FEEDS = [
 
 SENT_NEWS_FILE = "sent_news.txt"
 
+# ── Словарь: биржа → реферальная ссылка ──
 EXCHANGES = {
     "OKX": "https://okx.com/join/QUZOCF6B",
     "Bybit": "https://www.bybit.com/invite?ref=GXBQDK",
@@ -56,9 +63,9 @@ def get_full_article_text(url: str) -> str:
             downloaded = trafilatura.fetch_url(url)
             if downloaded:
                 text = trafilatura.extract(
-                    downloaded, 
-                    include_comments=False, 
-                    include_tables=False, 
+                    downloaded,
+                    include_comments=False,
+                    include_tables=False,
                     favor_recall=True
                 )
                 if text and len(text) > 100:
@@ -70,23 +77,54 @@ def get_full_article_text(url: str) -> str:
     return ""
 
 
-def translate_text(text: str, max_retries=3) -> str:
-    """Переводит текст на русский с повторными попытками при ошибках."""
-    if not text:
-        return ""
-    
-    # Обрезаем текст до 1500 символов (для новости этого достаточно)
+def translate_text_llm(text: str, max_retries: int = 2) -> str:
+    """Переводит текст на русский с помощью LLM через OpenRouter."""
+    if not text or len(text.strip()) < 10:
+        return text
+
+    # Обрезаем текст, чтобы не тратить лишние токены (для новости хватит 1500 символов)
     text = text[:1500]
-    
+
+    prompt = (
+        "Переведи следующий текст на русский язык. "
+        "Сохрани все факты, цифры и имена собственные. "
+        "Перевод должен быть естественным и грамотным. "
+        "Верни только перевод, без пояснений.\n\n"
+        f"Текст:\n{text}"
+    )
+
     for attempt in range(max_retries):
         try:
-            translated = GoogleTranslator(source='auto', target='ru').translate(text)
-            return translated
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                data=json.dumps({
+                    "model": "qwen/qwen-2.5-72b-instruct",
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.1,
+                }),
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            translated_text = result["choices"][0]["message"]["content"]
+
+            # Очищаем возможные лишние кавычки или пояснения от модели
+            translated_text = translated_text.strip().strip('"').strip("'")
+
+            if translated_text and len(translated_text) > 5:
+                return translated_text
+
         except Exception as e:
-            print(f"  Ошибка перевода (попытка {attempt + 1}): {e}")
+            print(f"  Ошибка перевода через LLM (попытка {attempt + 1}): {e}")
             time.sleep(3)
-            
-    return text
+
+    return text  # Если все попытки не удались — возвращаем оригинал
 
 
 def find_exchange_in_text(text: str):
@@ -113,31 +151,31 @@ async def check_news():
                 print(f"  ⚠️ Лента пуста или недоступна: {feed_url}")
                 continue
             print(f"  Найдено {len(feed.entries)} записей")
-            
+
             for entry in feed.entries[:3]:
                 if entry.link not in sent_news:
                     print(f"    Обработка: {entry.title[:50]}...")
-                    
+
                     full_text = get_full_article_text(entry.link)
                     if not full_text:
                         print(f"    ❌ Не удалось извлечь текст, пропускаем")
                         continue
-                    
-                    # Переводим заголовок и текст с паузой между запросами
-                    translated_title = translate_text(entry.title)
+
+                    # Переводим заголовок и текст через LLM
+                    translated_title = translate_text_llm(entry.title)
                     time.sleep(1)
-                    translated_text = translate_text(full_text)
+                    translated_text = translate_text_llm(full_text)
 
                     if translated_text:
                         if len(translated_text) > 3500:
                             translated_text = translated_text[:3500] + "..."
-                        
+
                         combined_text = translated_title + " " + translated_text
                         exchange_name, ref_link = find_exchange_in_text(combined_text)
-                        
+
                         message_text = f"📰 <b>{translated_title}</b>\n\n{translated_text}\n\n"
                         message_text += f"🔗 <a href='{entry.link}'>Источник</a>"
-                        
+
                         if exchange_name:
                             message_text += (
                                 f"\n\n━━━━━━━━━━━━━━━\n"
@@ -146,7 +184,7 @@ async def check_news():
                                 f"👉 <a href='{ref_link}'>Зарегистрироваться на {exchange_name}</a>"
                             )
                             print(f"    💰 Найдено упоминание {exchange_name}")
-                        
+
                         try:
                             await bot.send_message(
                                 chat_id=CHANNEL_ID,
@@ -173,7 +211,7 @@ async def check_news():
 
 
 async def main():
-    print("🤖 Запуск бота-агрегатора новостей (с реф-ссылками).")
+    print("🤖 Запуск бота-агрегатора новостей (перевод через LLM).")
     await check_news()
 
 

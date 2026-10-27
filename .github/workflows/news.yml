@@ -24,14 +24,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install aiogram feedparser python-dotenv trafilatura deep-translator
-          python -m pip install --upgrade pip
-          pip install aiogram feedparser python-dotenv
+          pip install aiogram feedparser python-dotenv trafilatura requests
 
       - name: Run news bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           NEWS_CHANNEL_ID: ${{ secrets.NEWS_CHANNEL_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python news_bot.py
 
       - name: Commit sent_news.txt
