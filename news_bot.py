@@ -13,15 +13,14 @@ bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
 CHANNEL_ID = os.getenv("NEWS_CHANNEL_ID")
 
 RSS_FEEDS = [
-    "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "https://cointelegraph.com/rss",
     "https://decrypt.co/feed",
     "https://www.theblock.co/rss.xml",
+    "https://www.coindesk.com/arc/outboundfeeds/rss/",
 ]
 
 SENT_NEWS_FILE = "sent_news.txt"
 
-# ── Словарь: биржа → твоя реферальная ссылка ──
 EXCHANGES = {
     "OKX": "https://okx.com/join/QUZOCF6B",
     "Bybit": "https://www.bybit.com/invite?ref=GXBQDK",
@@ -51,50 +50,53 @@ def save_sent_news(news_set):
 
 
 def get_full_article_text(url: str) -> str:
-    try:
-        downloaded = trafilatura.fetch_url(url)
-        if downloaded:
-            text = trafilatura.extract(downloaded, include_comments=False, include_tables=False)
-            return text if text else ""
-    except Exception as e:
-        print(f"Ошибка извлечения текста из {url}: {e}")
+    """Скачивает страницу и извлекает основной текст статьи с повторными попытками."""
+    for attempt in range(2):
+        try:
+            downloaded = trafilatura.fetch_url(url)
+            if downloaded:
+                text = trafilatura.extract(
+                    downloaded, 
+                    include_comments=False, 
+                    include_tables=False, 
+                    favor_recall=True
+                )
+                if text and len(text) > 100:
+                    return text
+            print(f"  Попытка {attempt + 1} не удалась для {url}")
+            time.sleep(2)
+        except Exception as e:
+            print(f"  Ошибка извлечения (попытка {attempt + 1}): {e}")
     return ""
 
 
-def translate_text(text: str) -> str:
-    """Переводит текст на русский язык с защитой от rate-limit."""
+def translate_text(text: str, max_retries=3) -> str:
+    """Переводит текст на русский с повторными попытками при ошибках."""
     if not text:
         return ""
-    try:
-        max_len = 4000
-        chunks = [text[i:i+max_len] for i in range(0, len(text), max_len)]
-        translated_chunks = []
-        for chunk in chunks:
-            translated_chunks.append(GoogleTranslator(source='auto', target='ru').translate(chunk))
-            time.sleep(1)  # Пауза 1 секунда между запросами
-        return " ".join(translated_chunks)
-    except Exception as e:
-        print(f"  Ошибка перевода: {e}")
-        return text
+    
+    # Обрезаем текст до 1500 символов (для новости этого достаточно)
+    text = text[:1500]
+    
+    for attempt in range(max_retries):
+        try:
+            translated = GoogleTranslator(source='auto', target='ru').translate(text)
+            return translated
+        except Exception as e:
+            print(f"  Ошибка перевода (попытка {attempt + 1}): {e}")
+            time.sleep(3)
+            
+    return text
 
 
 def find_exchange_in_text(text: str):
-    """
-    Ищет в тексте упоминание любой из бирж.
-    Возвращает (название_биржи, ссылка) или (None, None).
-    """
     if not text:
         return None, None
-    
     text_upper = text.upper()
-    
     for name, url in EXCHANGES.items():
-        # Ищем название биржи как отдельное слово (не часть другого слова)
-        # Например, "OKX" не должен находиться внутри "BOKXY"
         pattern = r'\b' + re.escape(name.upper()) + r'\b'
         if re.search(pattern, text_upper):
             return name, url
-    
     return None, None
 
 
@@ -104,29 +106,38 @@ async def check_news():
     print(f"[{time.strftime('%H:%M')}] Проверяем новости...")
 
     for feed_url in RSS_FEEDS:
+        print(f"  Читаем ленту: {feed_url}")
         try:
             feed = feedparser.parse(feed_url)
+            if not feed.entries:
+                print(f"  ⚠️ Лента пуста или недоступна: {feed_url}")
+                continue
+            print(f"  Найдено {len(feed.entries)} записей")
+            
             for entry in feed.entries[:3]:
                 if entry.link not in sent_news:
-                    print(f"  Обработка: {entry.title}")
+                    print(f"    Обработка: {entry.title[:50]}...")
                     
                     full_text = get_full_article_text(entry.link)
+                    if not full_text:
+                        print(f"    ❌ Не удалось извлечь текст, пропускаем")
+                        continue
+                    
+                    # Переводим заголовок и текст с паузой между запросами
                     translated_title = translate_text(entry.title)
+                    time.sleep(1)
                     translated_text = translate_text(full_text)
 
                     if translated_text:
                         if len(translated_text) > 3500:
                             translated_text = translated_text[:3500] + "..."
                         
-                        # ── Ищем упоминание биржи в тексте и заголовке ──
                         combined_text = translated_title + " " + translated_text
                         exchange_name, ref_link = find_exchange_in_text(combined_text)
                         
-                        # ── Формируем сообщение ──
                         message_text = f"📰 <b>{translated_title}</b>\n\n{translated_text}\n\n"
                         message_text += f"🔗 <a href='{entry.link}'>Источник</a>"
                         
-                        # ── Если нашли биржу — добавляем реф-ссылку ──
                         if exchange_name:
                             message_text += (
                                 f"\n\n━━━━━━━━━━━━━━━\n"
@@ -134,24 +145,25 @@ async def check_news():
                                 f"🎁 По моей ссылке — бонус при регистрации:\n"
                                 f"👉 <a href='{ref_link}'>Зарегистрироваться на {exchange_name}</a>"
                             )
-                            print(f"  💰 Найдено упоминание {exchange_name} — добавляем реф-ссылку")
+                            print(f"    💰 Найдено упоминание {exchange_name}")
                         
                         try:
                             await bot.send_message(
-                                chat_id=CHANNEL_ID, 
-                                text=message_text, 
-                                parse_mode="HTML", 
+                                chat_id=CHANNEL_ID,
+                                text=message_text,
+                                parse_mode="HTML",
                                 disable_web_page_preview=True
                             )
                             sent_news.add(entry.link)
                             new_news_found = True
-                            await asyncio.sleep(2)
+                            print(f"    ✅ Отправлено")
+                            await asyncio.sleep(3)
                         except Exception as e:
-                            print(f"  Ошибка отправки в Telegram: {e}")
+                            print(f"    ❌ Ошибка отправки в Telegram: {e}")
                     else:
-                        print(f"  Не удалось извлечь текст, пропускаем: {entry.link}")
+                        print(f"    ❌ Не удалось перевести текст")
         except Exception as e:
-            print(f"Ошибка при чтении {feed_url}: {e}")
+            print(f"  ❌ Ошибка при чтении {feed_url}: {e}")
 
     if new_news_found:
         save_sent_news(sent_news)
