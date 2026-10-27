@@ -62,15 +62,19 @@ def get_full_article_text(url: str) -> str:
 
 
 def translate_text(text: str) -> str:
+    """Переводит текст на русский язык с защитой от rate-limit."""
     if not text:
         return ""
     try:
         max_len = 4000
         chunks = [text[i:i+max_len] for i in range(0, len(text), max_len)]
-        translated_chunks = [GoogleTranslator(source='auto', target='ru').translate(chunk) for chunk in chunks]
+        translated_chunks = []
+        for chunk in chunks:
+            translated_chunks.append(GoogleTranslator(source='auto', target='ru').translate(chunk))
+            time.sleep(1)  # Пауза 1 секунда между запросами
         return " ".join(translated_chunks)
     except Exception as e:
-        print(f"Ошибка перевода: {e}")
+        print(f"  Ошибка перевода: {e}")
         return text
 
 
