@@ -87,7 +87,7 @@
   "M_SPOT": "HOLD",
   "GT_SPOT": "HOLD",
   "PI_SPOT": "HOLD",
-  "GHO_SPOT": "HOLD",
+  "GHO_SPOT": "BUY",
   "BNB_FUTURES": "HOLD",
   "XRP_FUTURES": "HOLD",
   "SOL_FUTURES": "HOLD",
