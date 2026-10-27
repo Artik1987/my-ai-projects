@@ -3,18 +3,16 @@ import feedparser
 import os
 import time
 import re
-import json
-import requests
 from dotenv import load_dotenv
 from aiogram import Bot
 import trafilatura
+from deep_translator import MyMemoryTranslator
 
 load_dotenv()
 
 # ── Настройки ──
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("NEWS_CHANNEL_ID")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 bot = Bot(token=BOT_TOKEN)
 
@@ -77,54 +75,24 @@ def get_full_article_text(url: str) -> str:
     return ""
 
 
-def translate_text_llm(text: str, max_retries: int = 2) -> str:
-    """Переводит текст на русский с помощью LLM через OpenRouter."""
+def translate_text(text: str, max_retries: int = 3) -> str:
+    """Переводит текст на русский с помощью бесплатного движка MyMemory."""
     if not text or len(text.strip()) < 10:
         return text
 
-    # Обрезаем текст, чтобы не тратить лишние токены (для новости хватит 1500 символов)
+    # Обрезаем текст, чтобы не превышать лимиты
     text = text[:1500]
-
-    prompt = (
-        "Переведи следующий текст на русский язык. "
-        "Сохрани все факты, цифры и имена собственные. "
-        "Перевод должен быть естественным и грамотным. "
-        "Верни только перевод, без пояснений.\n\n"
-        f"Текст:\n{text}"
-    )
 
     for attempt in range(max_retries):
         try:
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                data=json.dumps({
-                    "model": "meta-llama/llama-3.3-70b-instruct:free",
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.1,
-                }),
-                timeout=30
-            )
-            response.raise_for_status()
-            result = response.json()
-            translated_text = result["choices"][0]["message"]["content"]
-
-            # Очищаем возможные лишние кавычки или пояснения от модели
-            translated_text = translated_text.strip().strip('"').strip("'")
-
-            if translated_text and len(translated_text) > 5:
-                return translated_text
-
+            # MyMemory требует указания исходного языка (en - английский)
+            translated = MyMemoryTranslator(source='en', target='ru').translate(text)
+            return translated
         except Exception as e:
-            print(f"  Ошибка перевода через LLM (попытка {attempt + 1}): {e}")
-            time.sleep(3)
+            print(f"  Ошибка перевода MyMemory (попытка {attempt + 1}): {e}")
+            time.sleep(2)
 
-    return text  # Если все попытки не удались — возвращаем оригинал
+    return text  # Если не удалось, возвращаем оригинал
 
 
 def find_exchange_in_text(text: str):
@@ -161,10 +129,10 @@ async def check_news():
                         print(f"    ❌ Не удалось извлечь текст, пропускаем")
                         continue
 
-                    # Переводим заголовок и текст через LLM
-                    translated_title = translate_text_llm(entry.title)
+                    # Переводим заголовок и текст
+                    translated_title = translate_text(entry.title)
                     time.sleep(1)
-                    translated_text = translate_text_llm(full_text)
+                    translated_text = translate_text(full_text)
 
                     if translated_text:
                         if len(translated_text) > 3500:
@@ -211,7 +179,7 @@ async def check_news():
 
 
 async def main():
-    print("🤖 Запуск бота-агрегатора новостей (перевод через LLM).")
+    print("🤖 Запуск бота-агрегатора новостей (перевод MyMemory).")
     try:
         await check_news()
     finally:
