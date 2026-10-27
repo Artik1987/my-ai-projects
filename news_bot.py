@@ -102,7 +102,7 @@ def translate_text_llm(text: str, max_retries: int = 2) -> str:
                     "Content-Type": "application/json",
                 },
                 data=json.dumps({
-                    "model": "qwen/qwen-2.5-72b-instruct",
+                    "model": "meta-llama/llama-3.3-70b-instruct:free",
                     "messages": [
                         {"role": "user", "content": prompt}
                     ],
@@ -212,7 +212,10 @@ async def check_news():
 
 async def main():
     print("🤖 Запуск бота-агрегатора новостей (перевод через LLM).")
-    await check_news()
+    try:
+        await check_news()
+    finally:
+        await bot.session.close()  # Закрываем сессию, чтобы не было предупреждений
 
 
 if __name__ == "__main__":
