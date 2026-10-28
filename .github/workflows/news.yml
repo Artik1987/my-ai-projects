@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install aiogram feedparser python-dotenv trafilatura requests
+          pip install aiogram feedparser python-dotenv trafilatura deep-translator
 
       - name: Run news bot
         env:
