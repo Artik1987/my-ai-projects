@@ -10,10 +10,8 @@ from deep_translator import GoogleTranslator, MyMemoryTranslator
 
 load_dotenv()
 
-# ── Настройки ──
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("NEWS_CHANNEL_ID")
-
 bot = Bot(token=BOT_TOKEN)
 
 RSS_FEEDS = [
@@ -25,7 +23,6 @@ RSS_FEEDS = [
 
 SENT_NEWS_FILE = "sent_news.txt"
 
-# ── Словарь: биржа → реферальная ссылка ──
 EXCHANGES = {
     "OKX": "https://okx.com/join/QUZOCF6B",
     "Bybit": "https://www.bybit.com/invite?ref=GXBQDK",
@@ -55,7 +52,6 @@ def save_sent_news(news_set):
 
 
 def get_full_article_text(url: str) -> str:
-    """Скачивает страницу и извлекает основной текст статьи с повторными попытками."""
     for attempt in range(2):
         try:
             downloaded = trafilatura.fetch_url(url)
@@ -76,18 +72,13 @@ def get_full_article_text(url: str) -> str:
 
 
 def translate_text(text: str) -> str:
-    """
-    Переводит текст на русский.
-    Сначала пробует Google Translate (лучшее качество),
-    затем резервный MyMemory с правильными кодами языков.
-    """
+    """Гибридный перевод: Google -> MyMemory. Если оба не сработали — возвращает пустую строку."""
     if not text or len(text.strip()) < 10:
         return text
 
-    # Обрезаем текст, чтобы не превышать лимиты
     text = text[:1500]
 
-    # --- Попытка 1: Google Translate ---
+    # 1. Google Translate
     try:
         translated = GoogleTranslator(source='auto', target='ru').translate(text)
         if translated and len(translated) > 5:
@@ -95,17 +86,17 @@ def translate_text(text: str) -> str:
     except Exception as e:
         print(f"  Google Translate не сработал: {e}. Пробуем MyMemory...")
 
-    # --- Попытка 2: MyMemory (с правильным кодом языка) ---
+    # 2. MyMemory с правильными кодами
     try:
-        # MyMemory требует код вроде 'en-US' или название 'english'
         translated = MyMemoryTranslator(source='en-US', target='ru-RU').translate(text)
         if translated and len(translated) > 5:
             return translated
     except Exception as e:
         print(f"  MyMemory тоже не сработал: {e}")
 
-    # Если оба варианта не удались, возвращаем оригинал
-    return text
+    # Если оба не смогли — возвращаем пустую строку, чтобы новость пропустилась
+    print("  ❌ Не удалось перевести текст, новость пропускается")
+    return ""
 
 
 def find_exchange_in_text(text: str):
@@ -129,58 +120,59 @@ async def check_news():
         try:
             feed = feedparser.parse(feed_url)
             if not feed.entries:
-                print(f"  ⚠️ Лента пуста или недоступна: {feed_url}")
+                print(f"  ⚠️ Лента пуста: {feed_url}")
                 continue
             print(f"  Найдено {len(feed.entries)} записей")
 
             for entry in feed.entries[:3]:
-                if entry.link not in sent_news:
-                    print(f"    Обработка: {entry.title[:50]}...")
+                if entry.link in sent_news:
+                    continue
 
-                    full_text = get_full_article_text(entry.link)
-                    if not full_text:
-                        print(f"    ❌ Не удалось извлечь текст, пропускаем")
-                        continue
+                print(f"    Обработка: {entry.title[:50]}...")
+                full_text = get_full_article_text(entry.link)
+                if not full_text:
+                    print("    ❌ Не удалось извлечь текст, пропускаем")
+                    continue
 
-                    # Переводим заголовок и текст
-                    translated_title = translate_text(entry.title)
-                    time.sleep(1)
-                    translated_text = translate_text(full_text)
+                translated_title = translate_text(entry.title)
+                time.sleep(1)
+                translated_text = translate_text(full_text)
 
-                    if translated_text:
-                        if len(translated_text) > 3500:
-                            translated_text = translated_text[:3500] + "..."
+                # Если перевод не удался — пропускаем новость
+                if not translated_text:
+                    continue
 
-                        combined_text = translated_title + " " + translated_text
-                        exchange_name, ref_link = find_exchange_in_text(combined_text)
+                if len(translated_text) > 3500:
+                    translated_text = translated_text[:3500] + "..."
 
-                        message_text = f"📰 <b>{translated_title}</b>\n\n{translated_text}\n\n"
-                        message_text += f"🔗 <a href='{entry.link}'>Источник</a>"
+                combined_text = translated_title + " " + translated_text
+                exchange_name, ref_link = find_exchange_in_text(combined_text)
 
-                        if exchange_name:
-                            message_text += (
-                                f"\n\n━━━━━━━━━━━━━━━\n"
-                                f"💡 <b>Кстати!</b> Эту монету можно купить на бирже <b>{exchange_name}</b>.\n"
-                                f"🎁 По моей ссылке — бонус при регистрации:\n"
-                                f"👉 <a href='{ref_link}'>Зарегистрироваться на {exchange_name}</a>"
-                            )
-                            print(f"    💰 Найдено упоминание {exchange_name}")
+                message_text = f"📰 <b>{translated_title}</b>\n\n{translated_text}\n\n"
+                message_text += f"🔗 <a href='{entry.link}'>Источник</a>"
 
-                        try:
-                            await bot.send_message(
-                                chat_id=CHANNEL_ID,
-                                text=message_text,
-                                parse_mode="HTML",
-                                disable_web_page_preview=True
-                            )
-                            sent_news.add(entry.link)
-                            new_news_found = True
-                            print(f"    ✅ Отправлено")
-                            await asyncio.sleep(3)
-                        except Exception as e:
-                            print(f"    ❌ Ошибка отправки в Telegram: {e}")
-                    else:
-                        print(f"    ❌ Не удалось перевести текст")
+                if exchange_name:
+                    message_text += (
+                        f"\n\n━━━━━━━━━━━━━━━\n"
+                        f"💡 <b>Кстати!</b> Эту монету можно купить на бирже <b>{exchange_name}</b>.\n"
+                        f"🎁 По моей ссылке — бонус при регистрации:\n"
+                        f"👉 <a href='{ref_link}'>Зарегистрироваться на {exchange_name}</a>"
+                    )
+                    print(f"    💰 Найдено упоминание {exchange_name}")
+
+                try:
+                    await bot.send_message(
+                        chat_id=CHANNEL_ID,
+                        text=message_text,
+                        parse_mode="HTML",
+                        disable_web_page_preview=True
+                    )
+                    sent_news.add(entry.link)
+                    new_news_found = True
+                    print("    ✅ Отправлено")
+                    await asyncio.sleep(3)
+                except Exception as e:
+                    print(f"    ❌ Ошибка отправки: {e}")
         except Exception as e:
             print(f"  ❌ Ошибка при чтении {feed_url}: {e}")
 
@@ -192,7 +184,7 @@ async def check_news():
 
 
 async def main():
-    print("🤖 Запуск бота-агрегатора новостей (Google + MyMemory).")
+    print("🤖 Запуск бота-агрегатора новостей (гибридный перевод).")
     try:
         await check_news()
     finally:
