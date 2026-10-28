@@ -6,7 +6,7 @@ import re
 from dotenv import load_dotenv
 from aiogram import Bot
 import trafilatura
-from deep_translator import MyMemoryTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 
 load_dotenv()
 
@@ -75,24 +75,37 @@ def get_full_article_text(url: str) -> str:
     return ""
 
 
-def translate_text(text: str, max_retries: int = 3) -> str:
-    """Переводит текст на русский с помощью бесплатного движка MyMemory."""
+def translate_text(text: str) -> str:
+    """
+    Переводит текст на русский.
+    Сначала пробует Google Translate (лучшее качество),
+    затем резервный MyMemory с правильными кодами языков.
+    """
     if not text or len(text.strip()) < 10:
         return text
 
     # Обрезаем текст, чтобы не превышать лимиты
     text = text[:1500]
 
-    for attempt in range(max_retries):
-        try:
-            # MyMemory требует указания исходного языка (en - английский)
-            translated = MyMemoryTranslator(source='en', target='ru').translate(text)
+    # --- Попытка 1: Google Translate ---
+    try:
+        translated = GoogleTranslator(source='auto', target='ru').translate(text)
+        if translated and len(translated) > 5:
             return translated
-        except Exception as e:
-            print(f"  Ошибка перевода MyMemory (попытка {attempt + 1}): {e}")
-            time.sleep(2)
+    except Exception as e:
+        print(f"  Google Translate не сработал: {e}. Пробуем MyMemory...")
 
-    return text  # Если не удалось, возвращаем оригинал
+    # --- Попытка 2: MyMemory (с правильным кодом языка) ---
+    try:
+        # MyMemory требует код вроде 'en-US' или название 'english'
+        translated = MyMemoryTranslator(source='en-US', target='ru-RU').translate(text)
+        if translated and len(translated) > 5:
+            return translated
+    except Exception as e:
+        print(f"  MyMemory тоже не сработал: {e}")
+
+    # Если оба варианта не удались, возвращаем оригинал
+    return text
 
 
 def find_exchange_in_text(text: str):
@@ -179,11 +192,11 @@ async def check_news():
 
 
 async def main():
-    print("🤖 Запуск бота-агрегатора новостей (перевод MyMemory).")
+    print("🤖 Запуск бота-агрегатора новостей (Google + MyMemory).")
     try:
         await check_news()
     finally:
-        await bot.session.close()  # Закрываем сессию, чтобы не было предупреждений
+        await bot.session.close()
 
 
 if __name__ == "__main__":
