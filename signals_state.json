@@ -112,5 +112,6 @@
   "XAUT_FUTURES": "HOLD",
   "PEARL_SPOT": "HOLD",
   "PYTH_SPOT": "HOLD",
-  "Q_SPOT": "HOLD"
+  "Q_SPOT": "HOLD",
+  "USDG_FUTURES": "HOLD"
 }
