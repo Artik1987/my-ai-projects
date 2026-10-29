@@ -17,7 +17,7 @@
   "BCH_SPOT": "HOLD",
   "LTC_SPOT": "HOLD",
   "UNI_SPOT": "HOLD",
-  "USDE_SPOT": "BUY",
+  "USDE_SPOT": "SELL",
   "AVAX_SPOT": "HOLD",
   "SUI_SPOT": "HOLD",
   "USD1_SPOT": "HOLD",
@@ -113,5 +113,6 @@
   "PEARL_SPOT": "HOLD",
   "PYTH_SPOT": "HOLD",
   "Q_SPOT": "HOLD",
-  "USDG_FUTURES": "HOLD"
+  "USDG_FUTURES": "HOLD",
+  "FLR_SPOT": "HOLD"
 }
