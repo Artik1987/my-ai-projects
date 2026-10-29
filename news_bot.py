@@ -71,8 +71,22 @@ def get_full_article_text(url: str) -> str:
     return ""
 
 
+def is_english(text: str) -> bool:
+    """Проверяет, остался ли текст преимущественно английским."""
+    if not text:
+        return False
+    # Считаем количество латинских и кириллических букв
+    latin = len(re.findall(r'[a-zA-Z]', text))
+    cyrillic = len(re.findall(r'[а-яА-Я]', text))
+    total = latin + cyrillic
+    if total == 0:
+        return False
+    # Если латиницы больше 60%, значит, перевод не удался
+    return (latin / total) > 0.6
+
+
 def translate_text(text: str) -> str:
-    """Гибридный перевод: Google -> MyMemory. Если оба не сработали — возвращает пустую строку."""
+    """Переводит текст. Если перевод не удался или остался английским — возвращает пустую строку."""
     if not text or len(text.strip()) < 10:
         return text
 
@@ -81,21 +95,21 @@ def translate_text(text: str) -> str:
     # 1. Google Translate
     try:
         translated = GoogleTranslator(source='auto', target='ru').translate(text)
-        if translated and len(translated) > 5:
+        if translated and len(translated) > 5 and not is_english(translated):
             return translated
     except Exception as e:
-        print(f"  Google Translate не сработал: {e}. Пробуем MyMemory...")
+        print(f"  Google Translate не сработал: {e}")
 
-    # 2. MyMemory с правильными кодами
+    # 2. MyMemory
     try:
         translated = MyMemoryTranslator(source='en-US', target='ru-RU').translate(text)
-        if translated and len(translated) > 5:
+        if translated and len(translated) > 5 and not is_english(translated):
             return translated
     except Exception as e:
-        print(f"  MyMemory тоже не сработал: {e}")
+        print(f"  MyMemory не сработал: {e}")
 
-    # Если оба не смогли — возвращаем пустую строку, чтобы новость пропустилась
-    print("  ❌ Не удалось перевести текст, новость пропускается")
+    # Если оба не смогли или текст остался английским — возвращаем пустую строку
+    print("  ❌ Перевод не удался (текст остался английским), пропускаем")
     return ""
 
 
@@ -184,7 +198,7 @@ async def check_news():
 
 
 async def main():
-    print("🤖 Запуск бота-агрегатора новостей (гибридный перевод).")
+    print("🤖 Запуск бота-агрегатора новостей (строгая проверка перевода).")
     try:
         await check_news()
     finally:
