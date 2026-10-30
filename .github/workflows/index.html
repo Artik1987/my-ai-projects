@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artem | AI Developer</title>
+    <style>
+        /* Базовые настройки (Стиль Apple) */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        /* Переключатель языка */
+        .lang-switch {
+            text-align: right;
+            margin-bottom: 20px;
+        }
+        .lang-switch button {
+            background: #fff;
+            border: 1px solid #d2d2d7;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .lang-switch button:hover {
+            background: #e8e8ed;
+        }
+        /* Шапка */
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        header h1 {
+            font-size: 48px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+        header p {
+            font-size: 20px;
+            color: #86868b;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        /* Секции */
+        section {
+            margin-bottom: 50px;
+        }
+        h2 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+        }
+        /* Карточки проектов */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            margin-top: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .card p {
+            color: #515154;
+            font-size: 15px;
+            margin-bottom: 15px;
+        }
+        .card a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .card a:hover {
+            text-decoration: underline;
+        }
+        /* Блок ссылок (Биржи) */
+        .links-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .btn-link {
+            background: #fff;
+            border: 1px solid #d2d2d7;
+            padding: 10px 16px;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #1d1d1f;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-link:hover {
+            background: #1d1d1f;
+            color: #fff;
+        }
+        /* Форма связи */
+        .contact-form {
+            background: #fff;
+            padding: 30px;
+            border-radius: 18px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            max-width: 500px;
+        }
+        .contact-form input, .contact-form textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #d2d2d7;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 15px;
+            box-sizing: border-box;
+        }
+        .contact-form button {
+            background: #0071e3;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        .contact-form button:hover {
+            background: #0077ed;
+        }
+        footer {
+            text-align: center;
+            color: #86868b;
+            font-size: 14px;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #d2d2d7;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Переключатель языка -->
+    <div class="lang-switch">
+        <button onclick="setLang('ru')">RU</button>
+        <button onclick="setLang('en')">EN</button>
+    </div>
+
+    <!-- Шапка -->
+    <header>
+        <h1>Артём Юрченко</h1>
+        <p data-ru="AI-разработчик и специалист по автоматизации. Создаю умных ботов, RAG-системы и инструменты для трейдинга." 
+           data-en="AI Developer & Automation Specialist. I build smart bots, RAG systems, and trading tools.">
+        </p>
+    </header>
+
+    <!-- Проекты -->
+    <section>
+        <h2 data-ru="Мои проекты" data-en="My Projects">Мои проекты</h2>
+        <div class="grid">
+            <div class="card">
+                <h3>Health Timer</h3>
+                <p data-ru="Десктопное приложение на Python для контроля времени за ПК, напоминаний о разминке и здоровом питании." 
+                   data-en="Python desktop app for PC time tracking, workout reminders, and healthy eating.">
+                </p>
+                <a href="https://github.com/Artik1987/my-ai-projects" target="_blank" data-ru="Смотреть на GitHub →" data-en="View on GitHub →"></a>
+            </div>
+            <div class="card">
+                <h3>Crypto Signal Bot</h3>
+                <p data-ru="Бот для Telegram, который анализирует 100 монет по RSI и EMA и присылает сигналы с TP и SL." 
+                   data-en="Telegram bot analyzing 100 coins via RSI & EMA, sending signals with TP & SL.">
+                </p>
+                <a href="https://t.me/c/4496056121/17" target="_blank" data-ru="Смотреть канал →" data-en="View channel →"></a>
+            </div>
+            <div class="card">
+                <h3>Universal AI Agent</h3>
+                <p data-ru="Универсальный агент с памятью, поиском в интернете, калькулятором и чтением PDF (LangChain, ChromaDB)." 
+                   data-en="Universal agent with memory, web search, calculator, and PDF reading (LangChain, ChromaDB).">
+                </p>
+                <a href="https://github.com/Artik1987/my-ai-projects" target="_blank" data-ru="Смотреть на GitHub →" data-en="View on GitHub →"></a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Каналы -->
+    <section>
+        <h2 data-ru="Мои Telegram-каналы" data-en="My Telegram Channels">Мои Telegram-каналы</h2>
+        <div class="links-list">
+            <a href="https://t.me/c/4496056121/17" target="_blank" class="btn-link" data-ru="📈 Крипто-сигналы" data-en="📈 Crypto Signals"></a>
+            <a href="https://t.me/ваш_новостной_канал" target="_blank" class="btn-link" data-ru="📰 Крипто-новости" data-en="📰 Crypto News"></a>
+        </div>
+    </section>
+
+    <!-- Реферальные ссылки -->
+    <section>
+        <h2 data-ru="Где я торгую (Реф-ссылки)" data-en="Where I Trade (Ref links)">Где я торгую</h2>
+        <div class="links-list">
+            <a href="https://okx.com/join/QUZOCF6B" target="_blank" class="btn-link">OKX</a>
+            <a href="https://www.bybit.com/invite?ref=GXBQDK" target="_blank" class="btn-link">Bybit</a>
+            <a href="https://www.bitunix.top/u-link/referral/invitee?t_act=1&inviteCode=9asbmf" target="_blank" class="btn-link">Bitunix</a>
+            <a href="https://www.kucoin.com/r/rf/K4NQ2AMP" target="_blank" class="btn-link">KuCoin</a>
+            <a href="https://whitebird.io/signup?refid=vO7F7ENqLK" target="_blank" class="btn-link">Whitebird</a>
+        </div>
+    </section>
+
+    <!-- Форма связи -->
+    <section>
+        <h2 data-ru="Связаться со мной" data-en="Contact Me">Связаться со мной</h2>
+        <form class="contact-form" action="https://formsubmit.co/artik2656824@gmail.com" method="POST">
+            <input type="text" name="name" placeholder="Ваше имя / Your name" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <textarea name="message" rows="4" placeholder="Сообщение / Message" required></textarea>
+            <button type="submit" data-ru="Отправить" data-en="Send">Отправить</button>
+        </form>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 Артём Юрченко. <span data-ru="Все права защищены." data-en="All rights reserved."></span></p>
+    </footer>
+</div>
+
+<script>
+    // Логика переключения языка
+    function setLang(lang) {
+        document.querySelectorAll('[data-ru]').forEach(el => {
+            el.textContent = el.getAttribute('data-' + lang);
+        });
+    }
+</script>
+
+</body>
+</html>
