@@ -6,7 +6,7 @@ import re
 from dotenv import load_dotenv
 from aiogram import Bot
 import trafilatura
-from deep_translator import GoogleTranslator, MyMemoryTranslator
+from googletrans import Translator
 
 load_dotenv()
 
@@ -71,46 +71,40 @@ def get_full_article_text(url: str) -> str:
     return ""
 
 
-def is_english(text: str) -> bool:
+def is_translation_bad(text: str) -> bool:
     """Проверяет, остался ли текст преимущественно английским."""
     if not text:
-        return False
-    # Считаем количество латинских и кириллических букв
+        return True
     latin = len(re.findall(r'[a-zA-Z]', text))
     cyrillic = len(re.findall(r'[а-яА-Я]', text))
     total = latin + cyrillic
     if total == 0:
-        return False
-    # Если латиницы больше 60%, значит, перевод не удался
-    return (latin / total) > 0.6
+        return True
+    # Если латиницы больше 30%, значит, перевод не удался
+    return (latin / total) > 0.3
 
 
 def translate_text(text: str) -> str:
-    """Переводит текст. Если перевод не удался или остался английским — возвращает пустую строку."""
+    """Переводит текст с помощью googletrans. Если перевод плохой — возвращает пустую строку."""
     if not text or len(text.strip()) < 10:
         return text
 
     text = text[:1500]
 
-    # 1. Google Translate
     try:
-        translated = GoogleTranslator(source='auto', target='ru').translate(text)
-        if translated and len(translated) > 5 and not is_english(translated):
+        translator = Translator()
+        # Переводим с английского на русский
+        result = translator.translate(text, src='en', dest='ru')
+        translated = result.text
+        
+        if translated and len(translated) > 5 and not is_translation_bad(translated):
             return translated
+        else:
+            print("  ❌ Перевод получился плохим (осталась латиница)")
+            return ""
     except Exception as e:
-        print(f"  Google Translate не сработал: {e}")
-
-    # 2. MyMemory
-    try:
-        translated = MyMemoryTranslator(source='en-US', target='ru-RU').translate(text)
-        if translated and len(translated) > 5 and not is_english(translated):
-            return translated
-    except Exception as e:
-        print(f"  MyMemory не сработал: {e}")
-
-    # Если оба не смогли или текст остался английским — возвращаем пустую строку
-    print("  ❌ Перевод не удался (текст остался английским), пропускаем")
-    return ""
+        print(f"  Ошибка googletrans: {e}")
+        return ""
 
 
 def find_exchange_in_text(text: str):
@@ -152,8 +146,8 @@ async def check_news():
                 time.sleep(1)
                 translated_text = translate_text(full_text)
 
-                # Если перевод не удался — пропускаем новость
-                if not translated_text:
+                # Если перевод не удался или остался английским — пропускаем
+                if not translated_text or not translated_title:
                     continue
 
                 if len(translated_text) > 3500:
@@ -198,7 +192,7 @@ async def check_news():
 
 
 async def main():
-    print("🤖 Запуск бота-агрегатора новостей (строгая проверка перевода).")
+    print("🤖 Запуск бота-агрегатора новостей (googletrans).")
     try:
         await check_news()
     finally:

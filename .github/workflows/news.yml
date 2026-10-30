@@ -24,8 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install aiogram feedparser python-dotenv trafilatura deep-translator
-
+          pip install aiogram feedparser python-dotenv trafilatura googletrans==4.0.0-rc1
       - name: Run news bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
