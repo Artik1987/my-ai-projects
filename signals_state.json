@@ -52,7 +52,7 @@
   "ALGO_SPOT": "HOLD",
   "POL_SPOT": "HOLD",
   "RENDER_SPOT": "HOLD",
-  "LIT_SPOT": "HOLD",
+  "LIT_SPOT": "SELL",
   "ATOM_SPOT": "HOLD",
   "FIL_SPOT": "HOLD",
   "INJ_SPOT": "HOLD",
