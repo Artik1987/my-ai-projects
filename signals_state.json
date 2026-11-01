@@ -67,7 +67,7 @@
   "DASH_SPOT": "HOLD",
   "VET_SPOT": "HOLD",
   "CRV_SPOT": "HOLD",
-  "RAIN_SPOT": "HOLD",
+  "RAIN_SPOT": "SELL",
   "CC_SPOT": "HOLD",
   "USDG_SPOT": "HOLD",
   "PYUSD_SPOT": "HOLD",
