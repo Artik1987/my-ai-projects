@@ -15,7 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -37,5 +38,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add sent_news.txt || true
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update sent news" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update sent news" && git pull --rebase origin main && git push))
           
