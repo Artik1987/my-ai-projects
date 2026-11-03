@@ -34,9 +34,12 @@ jobs:
         run: python news_bot.py
 
       - name: Commit sent_news.txt
+        shell: bash
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add sent_news.txt || true
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update sent news" && git pull --rebase origin main && git push))
+          git commit -m "Update sent news" || true
+          git pull --rebase origin main || true
+          git push || true
           
