@@ -69,7 +69,7 @@
   "CRV_SPOT": "HOLD",
   "RAIN_SPOT": "HOLD",
   "CC_SPOT": "HOLD",
-  "USDG_SPOT": "HOLD",
+  "USDG_SPOT": "SELL",
   "PYUSD_SPOT": "HOLD",
   "CRO_SPOT": "HOLD",
   "MNT_SPOT": "HOLD",
