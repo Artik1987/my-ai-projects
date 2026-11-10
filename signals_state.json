@@ -23,7 +23,7 @@
   "USD1_SPOT": "HOLD",
   "BTC_FUTURES": "HOLD",
   "ETH_FUTURES": "HOLD",
-  "GRAM_SPOT": "SELL",
+  "GRAM_SPOT": "HOLD",
   "HBAR_SPOT": "HOLD",
   "XAUT_SPOT": "HOLD",
   "TAO_SPOT": "HOLD",
